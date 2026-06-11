@@ -1,0 +1,1066 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ungal Nanban - Civic Issue Reporting</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Firebase SDKs (For Global Text/Status Database) -->
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-auth-compat.js"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Tamil:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'Noto Sans Tamil', 'sans-serif'] },
+                    colors: { brand: { 50: '#eff6ff', 100: '#dbeafe', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8', 900: '#1e3a8a' } }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { scroll-behavior: smooth; transition: background-color 0.3s, color 0.3s; }
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .dark body { background-color: #111827; color: #f9fafb; }
+        .dark .bg-white { background-color: #1f2937 !important; border-color: #374151 !important; color: #f9fafb !important; }
+        .dark .bg-gray-50 { background-color: #111827 !important; color: #f9fafb !important; }
+        .dark .text-gray-900, .dark .text-gray-800 { color: #f9fafb !important; }
+        .dark .text-gray-700, .dark .text-gray-600 { color: #d1d5db !important; }
+        .dark .text-gray-500 { color: #9ca3af !important; }
+        .dark input, .dark textarea, .dark select { background-color: #374151 !important; color: white !important; border-color: #4b5563 !important; }
+        .dark .bg-gray-100, .dark .bg-gray-200 { background-color: #374151 !important; border-color: #4b5563 !important; color: #f9fafb !important; }
+        .dark header, .dark footer { background-color: #1f2937 !important; border-color: #374151 !important; }
+        .dark table thead { background-color: #111827 !important; }
+        .dark tr.border-b { border-color: #374151 !important; }
+        .dark tr:hover { background-color: #374151 !important; }
+        .dark #modal-backdrop, .dark #details-modal-backdrop { background-color: rgba(0,0,0,0.7) !important; }
+        .dark .border-gray-200, .dark .border-gray-300 { border-color: #4b5563 !important; }
+
+        .loader { border: 3px solid #f3f3f3; border-radius: 50%; border-top: 3px solid #3b82f6; width: 24px; height: 24px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .pulse-recording { animation: pulseRec 1.5s infinite; }
+        @keyframes pulseRec { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }
+        
+        #modal-backdrop, #details-modal-backdrop { backdrop-filter: blur(4px); transition: opacity 0.2s ease; }
+        .timeline-line { position: absolute; left: 15px; top: 30px; bottom: -30px; width: 2px; background-color: #e5e7eb; z-index: 0; }
+        .timeline-step:last-child .timeline-line { display: none; }
+        
+        video.media-preview { object-fit: cover; border-radius: 0.5rem; background: #000; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 flex flex-col min-h-screen">
+
+    <header class="bg-white shadow-sm sticky top-0 z-40 transition-colors">
+        <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-3 cursor-pointer" onclick="navigate('landing')">
+                <div class="bg-brand-600 text-white w-10 h-10 rounded-xl flex items-center justify-center shadow-lg">
+                    <i class="fa-solid fa-hands-holding-circle text-xl"></i>
+                </div>
+                <div class="hidden sm:block">
+                    <h1 class="font-bold text-xl text-gray-900 leading-tight" id="app-title">UNGAL NANBAN</h1>
+                    <p class="text-xs text-gray-500 font-medium" id="app-subtitle">Civic Issue Reporting</p>
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-4 sm:gap-6">
+                <nav class="hidden sm:flex items-center gap-4 text-sm font-bold text-gray-700">
+                    <button onclick="navigate('landing')" class="hover:text-brand-600 transition dark:hover:text-brand-400" id="nav-home">Home</button>
+                    <button onclick="navigate('about')" class="hover:text-brand-600 transition dark:hover:text-brand-400" id="nav-about">About</button>
+                </nav>
+
+                <div class="flex items-center gap-2 sm:gap-3 border-l-0 sm:border-l border-gray-200 dark:border-gray-700 pl-0 sm:pl-5">
+                    <button onclick="toggleTheme()" class="w-9 h-9 flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full transition" title="Toggle Dark/Light Mode">
+                        <i id="theme-icon" class="fa-solid fa-moon"></i>
+                    </button>
+                    <button onclick="toggleLanguage()" class="flex items-center gap-2 bg-brand-50 hover:bg-brand-100 text-brand-700 px-3 py-1.5 rounded-full text-sm font-bold transition border border-brand-200">
+                        <i class="fa-solid fa-language"></i><span id="lang-btn-text">English</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-grow max-w-6xl mx-auto w-full px-4 py-8" id="main-content"></main>
+
+    <footer class="bg-white border-t border-gray-200 mt-auto">
+        <div class="max-w-6xl mx-auto px-4 py-6 text-center text-sm text-gray-500">
+            <p id="footer-text">Secure, Anonymous, and Direct to the Authorities. © 2026 Ungal Nanban.</p>
+        </div>
+    </footer>
+
+    <div id="custom-modal" class="fixed inset-0 z-50 hidden items-center justify-center">
+        <div id="modal-backdrop" class="absolute inset-0 bg-gray-900 bg-opacity-50" onclick="closeModal('custom-modal')"></div>
+        <div class="bg-white rounded-2xl shadow-2xl p-6 z-10 w-11/12 max-w-md transform transition-all scale-95 opacity-0" id="custom-modal-content">
+            <div class="flex justify-center mb-4" id="modal-icon-container"></div>
+            <h3 class="text-xl font-bold text-center text-gray-900 mb-2" id="modal-title">Notice</h3>
+            <p class="text-gray-600 text-center mb-6" id="modal-message">Message</p>
+            <div class="flex justify-center" id="modal-actions">
+                <button onclick="closeModal('custom-modal')" class="bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2 px-6 rounded-lg transition">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // 🚀 1. CLOUDINARY CONFIGURATION (For Media)
+        // -> PASTE YOUR CLOUDINARY DETAILS HERE
+        // ==========================================
+        const CLOUDINARY_CLOUD_NAME = ""; 
+        const CLOUDINARY_UPLOAD_PRESET = ""; 
+
+        // ==========================================
+        // 🚀 2. FIREBASE CONFIGURATION (For Text Data)
+        // -> PASTE YOUR FIREBASE DETAILS HERE
+        // ==========================================
+        const firebaseConfig = {
+  apiKey: "",
+  authDomain: "",
+  projectId: "",
+  storageBucket: "",
+  messagingSenderId: "",
+  appId: "",
+  measurementId: ""
+};
+
+        // Initialize Global Databases
+        let db = null;
+        let isCloudConnected = false;
+
+        if (firebaseConfig.apiKey) {
+            firebase.initializeApp(firebaseConfig);
+            db = firebase.firestore();
+            firebase.auth().signInAnonymously(); // Required for reading/writing safely
+            isCloudConnected = true;
+        }
+
+        // Global State
+        if(!localStorage.getItem('un_admin_creds')) {
+            localStorage.setItem('un_admin_creds', JSON.stringify({ user: 'admin', pass: 'admin123' }));
+        }
+
+        const state = {
+            lang: 'ta', theme: localStorage.getItem('un_theme') || 'light', view: 'landing', adminTab: 'Received',
+            lastSubmissionId: localStorage.getItem('un_last_id') || null, lastKnownStatus: localStorage.getItem('un_last_status') || null,
+            isAdminAuth: false, submissions: []
+        };
+
+        if (state.theme === 'dark') document.documentElement.classList.add('dark');
+
+        let currentFiles = []; 
+        let mediaRecorder = null;
+        let recordedChunks = [];
+        let recordingStream = null;
+        let recordingInterval = null;
+        let recordingTimeLeft = 60;
+        let currentFacingMode = 'environment'; 
+        let currentAdminModeIssueId = null;
+        let isSwitchingCamera = false; // Bug fix flag
+
+        // 🚀 Cloudinary Upload Function (Background process)
+        async function uploadMediaToCloudinary(fileObj) {
+            if (!CLOUDINARY_CLOUD_NAME || CLOUDINARY_CLOUD_NAME === "YOUR_CLOUD_NAME") return null;
+
+            const formData = new FormData();
+            formData.append('file', fileObj.blob, fileObj.name);
+            formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+
+            const resourceType = fileObj.type.startsWith('video/') || fileObj.type.startsWith('audio/') ? 'video' : 'image';
+
+            try {
+                const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${resourceType}/upload`, {
+                    method: 'POST', body: formData
+                });
+                const data = await res.json();
+                return { url: data.secure_url, type: fileObj.type, name: fileObj.name };
+            } catch (err) {
+                console.error("Cloudinary Upload Error:", err);
+                return null;
+            }
+        }
+
+        // 🚀 Firebase Real-time Global Sync
+        function startGlobalSync() {
+            if (!isCloudConnected) return;
+
+            db.collection('issues').orderBy('date', 'desc').onSnapshot((snapshot) => {
+                state.submissions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                // Track user's specific status issue
+                if (state.lastSubmissionId && !state.isAdminAuth) {
+                    const myIssue = state.submissions.find(i => i.id === state.lastSubmissionId);
+                    if (myIssue && myIssue.status !== state.lastKnownStatus) {
+                        state.lastKnownStatus = myIssue.status;
+                        localStorage.setItem('un_last_status', myIssue.status);
+                        
+                        showModal('custom-modal', t('popupUpdateTitle'), `${t('popupUpdateMsg')} ${t('stat' + myIssue.status) || myIssue.status}`, 'info');
+                        if (state.view === 'statusCheck' && document.getElementById('status-track-id') && document.getElementById('status-track-id').value === state.lastSubmissionId) {
+                            handleStatusCheck();
+                        }
+                    }
+                }
+
+                // Refresh UI if user is on a data page
+                if (['publicIssues', 'adminDashboard', 'statusCheck'].includes(state.view)) {
+                    renderView();
+                }
+            });
+        }
+
+        const i18n = {
+            en: {
+                appTitle: "UNGAL NANBAN", appSubtitle: "Civic Issue Reporting", langToggle: "தமிழ்", adminLink: "Admin",
+                footerText: "Secure, Anonymous, and Direct to the Authorities. © 2026 Ungal Nanban.",
+                navHome: "Home", navAbout: "About",
+                aboutTitle: "About Ungal Nanban",
+                aboutDesc1: "Ungal Nanban (Your Friend) is a highly secure, anonymous civic issue reporting platform bridging the gap between citizens and local authorities.",
+                aboutDesc2: "We prioritize your privacy. No personal data is collected. Simply capture the issue lively and track its resolution with full transparency using your unique Tracking ID.",
+                tabReceived: "Received Queries", tabWorking: "Working on Issue", tabCompletedAdmin: "Completed Issues",
+                portalUser: "Citizen Portal", portalAdmin: "Official Portal", landingTitle: "Welcome to Ungal Nanban", 
+                landingDesc: "Bridging the gap between citizens and authorities. Select your portal to proceed.", 
+                welcome: "Report Civic Issues Anonymously",
+                welcomeDesc: "Help improve your community. Submit issues regarding electricity, water, roads, and more without revealing your identity.",
+                btnReport: "Report Issue", btnStatus: "Check Status", btnPublicIssues: "Issues Raised",
+                formTitle: "Submit a New Issue", lblCategory: "Issue Category", catSelect: "-- Select Category --",
+                catElectricity: "Electricity", catWater: "Water Supply", catDrainage: "Drainage / Sewage", catRoads: "Roads / Potholes", catOther: "Other",
+                lblDesc: "Description of the Issue", descPlaceholder: "Provide details about location and the exact problem...",
+                lblMedia: "Attach Evidence (Max 60s)", 
+                btnUpload: "Upload File", btnRecVideo: "Live Video", btnRecAudio: "Live Audio", btnRecPhoto: "Live Photo",
+                btnStopRec: "Stop Recording", btnCapture: "Capture Photo", timeRemaining: "sec remaining",
+                btnSubmit: "Submit Report", btnBack: "Back",
+                publicTitle: "Public Issues Board", tabOngoing: "Ongoing Issues", tabCompleted: "Completed",
+                noIssues: "No issues found in this category.",
+                statusTitle: "Track Your Issue", lblTrackId: "Tracking ID", trackIdPlaceholder: "e.g., UN-A1B2C3D4",
+                btnCheck: "Check Status", statusResultTitle: "Live Tracking Timeline",
+                statReceived: "Received", statAccepted: "Accepted", statWorking: "Working", statCompleted: "Completed",
+                proofTitle: "Resolution Evidence", proofDesc: "Upload photos/videos to prove the issue is resolved.",
+                lblAdminProof: "Attach Proof (Live Photo/Video)", btnSubmitProof: "Submit Evidence",
+                adminEvidenceLabel: "Resolution Evidence (Admin)", viewDetails: "View Details & Evidence",
+                lblAdminDesc: "Work Description", adminDescPlaceholder: "Describe how the issue was resolved...",
+                adminLoginTitle: "Admin Portal", lblUsername: "Username", lblPassword: "Password", btnLogin: "Login",
+                btnForgot: "Change Password / Forgot?", adminDashTitle: "Issue Management Dashboard",
+                colId: "ID", colDate: "Date/Time", colCat: "Category", colStatus: "Status", colAction: "Action",
+                btnUpdate: "Update", btnLogout: "Logout", btnView: "View Details",
+                otpTitle: "Verify Identity", otpDesc: "An OTP has been sent to the registered admin mobile/email. (Use '1234' for demo)",
+                btnVerifyOTP: "Verify OTP",
+                newCredsTitle: "Set New Credentials", btnSaveCreds: "Save Credentials",
+                alertReq: "Please fill all required fields.", alertMediaLimit: "Media must be under 60 seconds.",
+                alertIdReq: "Enter a tracking ID.", alertNotFound: "Tracking ID not found.", alertCopied: "ID copied to clipboard!",
+                alertLoginFailed: "Invalid credentials.", alertOTPFailed: "Invalid OTP.",
+                popupUpdateTitle: "Issue Update!", popupUpdateMsg: "Your reported issue status has changed to:",
+                lblAction: "Action", msgNoIssuesDash: "No issues found in this section.",
+                btnCancel: "Cancel", btnDelete: "Delete", btnDeleteReport: "Delete Report",
+                msgStatusUpdated: "Status updated by authorities.",
+                msgNoUserMedia: "No user media attached.", msgLoadingMedia: "Loading media from Cloud...",
+                msgMediaMissing: "Media missing or expired.", msgNoAdminMedia: "No admin evidence attached.",
+                lblTrackId2: "Tracking ID", lblDate: "Date", lblCategory2: "Category", lblDesc2: "Description",
+                lblUserEvidence: "User Evidence", btnCloseDetails: "Close Details", titleIssueDetails: "Issue Full Details",
+                msgProcessing: "Processing...", msgReportSubmitted: "Report Submitted. ID: ",
+                btnHome: "Home", btnTrackStatus: "Track Status", msgFailedMedia: "Failed to save data. Please check connection.",
+                alertSuccess: "Success", alertError: "Error", msgDeleted: "Report deleted successfully.",
+                msgAdminCompletedSuccess: "Issue successfully marked as completed with evidence.",
+                msgSaveAdminMediaFailed: "Failed to save admin media.", msgConfirmDelete: "Are you sure you want to delete this issue?",
+                msgCamError: "Microphone/Camera access denied or unavailable.", msgCredsUpdated: "Credentials updated. Please login."
+            },
+            ta: {
+                appTitle: "உங்கள் நண்பன்", appSubtitle: "பொதுப் பிரச்சனை பதிவு", langToggle: "English", adminLink: "நிர்வாகி",
+                footerText: "பாதுகாப்பானது, அடையாளம் மறைக்கப்பட்டது. © 2026 உங்கள் நண்பன்.",
+                navHome: "முகப்பு", navAbout: "பற்றி",
+                aboutTitle: "உங்கள் நண்பன் பற்றி",
+                aboutDesc1: "உங்கள் நண்பன் என்பது குடிமக்களுக்கும் உள்ளூர் அதிகாரிகளுக்கும் இடையிலான பாலமாக செயல்படும் மிகவும் பாதுகாப்பான, அநாமதேய பொதுப் பிரச்சனை பதிவு தளமாகும்.",
+                aboutDesc2: "நாங்கள் உங்கள் தனியுரிமைக்கு முன்னுரிமை அளிக்கிறோம். எந்தவொரு தனிப்பட்ட தரவும் சேகரிக்கப்படவில்லை. பிரச்சனையை நேரடியாக புகைப்படம்/காணொளி எடுத்து பதிவு செய்து, கண்காணிப்பு எண் மூலம் முழு வெளிப்படைத்தன்மையுடன் அதற்கான தீர்வை அறியுங்கள்.",
+                tabReceived: "புதிய புகார்கள்", tabWorking: "பணியில் உள்ளவை", tabCompletedAdmin: "முடிக்கப்பட்டவை",
+                portalUser: "குடிமக்கள் நுழைவாயில்", portalAdmin: "அதிகாரிகள் நுழைவாயில்", landingTitle: "உங்கள் நண்பனுக்கு வருக", 
+                landingDesc: "பொதுமக்களுக்கும் அதிகாரிகளுக்கும் இடையிலான பாலமாக... உங்கள் நுழைவாயிலைத் தேர்ந்தெடுக்கவும்.",
+                welcome: "பொதுப் பிரச்சனைகளை பாதுகாப்பாகப் புகாரளிக்கவும்",
+                welcomeDesc: "உங்கள் சமூகத்தை மேம்படுத்த உதவுங்கள். அடையாளத்தை வெளிப்படுத்தாமல் சிக்கல்களைப் பதிவு செய்யுங்கள்.",
+                btnReport: "புகார் செய்", btnStatus: "நிலைமையை சரிபார்", btnPublicIssues: "பதிவான சிக்கல்கள்",
+                formTitle: "புதிய சிக்கலை பதிவு செய்க", lblCategory: "சிக்கலின் வகை", catSelect: "-- வகை --",
+                catElectricity: "மின்சாரம்", catWater: "குடிநீர்", catDrainage: "கழிவுநீர்", catRoads: "சாலைகள்", catOther: "மற்றவை",
+                lblDesc: "விளக்கம்", descPlaceholder: "இடம் மற்றும் பிரச்சனை விவரங்கள்...",
+                lblMedia: "ஆதாரங்களை இணைக்கவும் (அதிகபட்சம் 60 வினாடி)", 
+                btnUpload: "பதிவேற்று", btnRecVideo: "நேரடி வீடியோ", btnRecAudio: "நேரடி ஆடியோ", btnRecPhoto: "நேரடி புகைப்படம்",
+                btnStopRec: "நிறுத்து", btnCapture: "படம் பிடி", timeRemaining: "வினாடிகள் மீதம்",
+                btnSubmit: "சமர்ப்பி", btnBack: "பின்திரும்பு",
+                publicTitle: "பொது சிக்கல்கள் பலகை", tabOngoing: "தொடரும் சிக்கல்கள்", tabCompleted: "முடிக்கப்பட்டவை",
+                noIssues: "இந்த பிரிவில் சிக்கல்கள் எதுவும் இல்லை.",
+                statusTitle: "உங்கள் புகாரை கண்காணிக்க", lblTrackId: "கண்காணிப்பு எண்", trackIdPlaceholder: "உதாரணம்: UN-A1B2C3D4",
+                btnCheck: "சரிபார்", statusResultTitle: "நிகழ்நேர கண்காணிப்பு",
+                statReceived: "பெறப்பட்டது", statAccepted: "ஏற்கப்பட்டது", statWorking: "பணியில் உள்ளது", statCompleted: "முடிக்கப்பட்டது",
+                proofTitle: "தீர்வுக்கான ஆதாரம்", proofDesc: "பிரச்சனை தீர்க்கப்பட்டதை நிரூபிக்க புகைப்படங்களை பதிவேற்றவும்.",
+                lblAdminProof: "ஆதாரத்தை இணைக்கவும்", btnSubmitProof: "சமர்ப்பி",
+                adminEvidenceLabel: "தீர்வுக்கான ஆதாரம் (நிர்வாகி)", viewDetails: "ஆதாரங்களைக் காண்",
+                lblAdminDesc: "பணி விளக்கம்", adminDescPlaceholder: "பிரச்சனை எவ்வாறு தீர்க்கப்பட்டது என்பதை விவரிக்கவும்...",
+                adminLoginTitle: "நிர்வாகி நுழைவாயில்", lblUsername: "பயனர்பெயர்", lblPassword: "கடவுச்சொல்", btnLogin: "உள்நுழைக",
+                btnForgot: "கடவுச்சொல் மாற்ற / மறந்ததா?", adminDashTitle: "சிக்கல் மேலாண்மை பலகை",
+                colId: "எண்", colDate: "தேதி/நேரம்", colCat: "வகை", colStatus: "நிலை", colAction: "செயல்",
+                btnUpdate: "புதுப்பி", btnLogout: "வெளியேறு", btnView: "விவரங்களை காண்",
+                otpTitle: "அடையாள சரிபார்ப்பு", otpDesc: "OTP அனுப்பப்பட்டுள்ளது. (மாதிரிக்கு '1234' பயன்படுத்தவும்)",
+                btnVerifyOTP: "OTP சரிபார்",
+                newCredsTitle: "புதிய விவரங்களை அமைக்கவும்", btnSaveCreds: "சேமி",
+                alertReq: "அனைத்து தகவல்களையும் நிரப்பவும்.", alertMediaLimit: "60 வினாடிகளுக்குள் இருக்க வேண்டும்.",
+                alertIdReq: "எண்ணை உள்ளிடவும்.", alertNotFound: "எண் கண்டறியப்படவில்லை.", alertCopied: "நகலெடுக்கப்பட்டது!",
+                alertLoginFailed: "தவறான பயனர்பெயர்/கடவுச்சொல்.", alertOTPFailed: "தவறான OTP.",
+                popupUpdateTitle: "நிலை புதுப்பிப்பு!", popupUpdateMsg: "உங்கள் புகாரின் தற்போதைய நிலை:",
+                lblAction: "செயல்", msgNoIssuesDash: "இந்த பிரிவில் புகார்கள் இல்லை.",
+                btnCancel: "ரத்து செய்", btnDelete: "நீக்கு", btnDeleteReport: "புகாரை நீக்கு",
+                msgStatusUpdated: "அதிகாரிகளால் நிலை புதுப்பிக்கப்பட்டது.",
+                msgNoUserMedia: "பயனர் ஆதாரம் இணைக்கப்படவில்லை.", msgLoadingMedia: "ஆதாரங்கள் ஏற்றப்படுகின்றன...",
+                msgMediaMissing: "ஆதாரம் காணவில்லை அல்லது காலாவதியானது.", msgNoAdminMedia: "நிர்வாகி ஆதாரம் இணைக்கப்படவில்லை.",
+                lblTrackId2: "கண்காணிப்பு எண்", lblDate: "தேதி", lblCategory2: "வகை", lblDesc2: "விளக்கம்",
+                lblUserEvidence: "பயனர் ஆதாரம்", btnCloseDetails: "விவரங்களை மூடு", titleIssueDetails: "முழு விவரங்கள்",
+                msgProcessing: "செயல்படுத்தப்படுகிறது...", msgReportSubmitted: "புகார் பதிவு செய்யப்பட்டது. எண்: ",
+                btnHome: "முகப்பு", btnTrackStatus: "நிலையை சரிபார்", msgFailedMedia: "ஆதாரத்தை சேமிக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்.",
+                alertSuccess: "வெற்றி", alertError: "பிழை", msgDeleted: "புகார் வெற்றிகரமாக நீக்கப்பட்டது.",
+                msgAdminCompletedSuccess: "ஆதாரத்துடன் பிரச்சனை தீர்க்கப்பட்டதாக குறிக்கப்பட்டது.",
+                msgSaveAdminMediaFailed: "ஆதாரத்தை சேமிக்க முடியவில்லை.", msgConfirmDelete: "இந்த புகாரை நீக்க வேண்டுமா? இந்தச் செயலை மாற்ற முடியாது.",
+                msgCamError: "மைக்ரோஃபோன்/கேமரா அனுமதி மறுக்கப்பட்டது.", msgCredsUpdated: "விவரங்கள் புதுப்பிக்கப்பட்டன. தயவுசெய்து உள்நுழையவும்."
+            }
+        };
+
+        const t = (key) => i18n[state.lang][key];
+
+        function toggleLanguage() { state.lang = state.lang === 'en' ? 'ta' : 'en'; updateStaticText(); renderView(); }
+        
+        function toggleTheme() {
+            state.theme = state.theme === 'light' ? 'dark' : 'light';
+            localStorage.setItem('un_theme', state.theme);
+            if (state.theme === 'dark') document.documentElement.classList.add('dark');
+            else document.documentElement.classList.remove('dark');
+            updateStaticText();
+        }
+
+        function updateStaticText() {
+            document.getElementById('app-title').innerText = t('appTitle');
+            document.getElementById('app-subtitle').innerText = t('appSubtitle');
+            document.getElementById('lang-btn-text').innerText = t('langToggle');
+            document.getElementById('footer-text').innerText = t('footerText');
+            document.getElementById('nav-home').innerText = t('navHome');
+            document.getElementById('nav-about').innerText = t('navAbout');
+            
+            const themeIcon = document.getElementById('theme-icon');
+            if(state.theme === 'dark') { themeIcon.className = 'fa-solid fa-sun text-yellow-500'; }
+            else { themeIcon.className = 'fa-solid fa-moon text-gray-700'; }
+            
+            document.body.classList.toggle('font-tamil', state.lang === 'ta');
+        }
+
+        function navigate(view) {
+            stopMediaTracks(); 
+            state.view = view;
+            currentFiles = [];
+            renderView();
+        }
+
+        function showModal(id, title, message, type = 'info', actionsHtml = null) {
+            const modal = document.getElementById(id);
+            const content = document.getElementById(`${id}-content`);
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('modal-message').innerHTML = message;
+            
+            if(actionsHtml) {
+                document.getElementById('modal-actions').innerHTML = actionsHtml;
+            } else {
+                document.getElementById('modal-actions').innerHTML = `<button onclick="closeModal('${id}')" class="bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2 px-6 rounded-lg transition">OK</button>`;
+            }
+
+            let iconHtml = '';
+            if(type === 'error') iconHtml = '<div class="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center"><i class="fa-solid fa-circle-exclamation text-3xl text-red-500"></i></div>';
+            else if (type === 'success') iconHtml = '<div class="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center"><i class="fa-solid fa-check text-3xl text-green-500"></i></div>';
+            else iconHtml = '<div class="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center"><i class="fa-solid fa-bell text-3xl text-blue-500"></i></div>';
+            
+            document.getElementById('modal-icon-container').innerHTML = iconHtml;
+            modal.classList.remove('hidden'); modal.classList.add('flex');
+            requestAnimationFrame(() => { content.classList.remove('scale-95', 'opacity-0'); content.classList.add('scale-100', 'opacity-100'); });
+        }
+
+        function closeModal(id) {
+            const modal = document.getElementById(id);
+            const content = document.getElementById(`${id}-content`);
+            content.classList.remove('scale-100', 'opacity-100'); content.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 200);
+        }
+
+        function generateTrackingId() {
+            return 'UN-' + Math.random().toString(36).substr(2, 8).toUpperCase();
+        }
+
+        let activeMediaType = null;
+
+        async function startLiveMedia(type) {
+            activeMediaType = type;
+            try {
+                let constraints;
+                if(type === 'video') constraints = { video: { facingMode: currentFacingMode }, audio: true };
+                else if(type === 'audio') constraints = { audio: true };
+                else constraints = { video: { facingMode: currentFacingMode } }; 
+
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                recordingStream = stream;
+                
+                document.getElementById('media-options').classList.add('hidden');
+                document.getElementById('recording-ui').classList.remove('hidden');
+                document.getElementById('submit-btn').disabled = true;
+                
+                const preview = document.getElementById('live-preview');
+                const timerContainer = document.getElementById('rec-timer-container');
+                const actionBtn = document.getElementById('rec-action-btn');
+                const switchCamBtn = document.getElementById('switch-cam-btn');
+
+                if(switchCamBtn) {
+                    if (type === 'video' || type === 'photo') switchCamBtn.classList.remove('hidden');
+                    else switchCamBtn.classList.add('hidden');
+                }
+
+                if(type === 'video' || type === 'photo') {
+                    preview.srcObject = stream;
+                    preview.classList.remove('hidden');
+                    preview.play();
+                } else preview.classList.add('hidden');
+
+                if(type === 'photo') {
+                    timerContainer.classList.add('hidden');
+                    actionBtn.innerHTML = `<i class="fa-solid fa-camera"></i> ${t('btnCapture')}`;
+                    actionBtn.onclick = capturePhoto;
+                    actionBtn.className = "bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-full flex items-center gap-2 transition";
+                } else {
+                    timerContainer.classList.remove('hidden');
+                    actionBtn.innerHTML = `<i class="fa-solid fa-stop"></i> ${t('btnStopRec')}`;
+                    actionBtn.onclick = stopRecording;
+                    actionBtn.className = "bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-full flex items-center gap-2 transition pulse-recording";
+                    
+                    recordedChunks = [];
+                    mediaRecorder = new MediaRecorder(stream);
+                    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+                    mediaRecorder.onstop = processRecording;
+                    
+                    mediaRecorder.start(1000); 
+                    startTimer();
+                }
+            } catch (err) {
+                console.error("Recording error:", err);
+                showModal('custom-modal', t('alertError'), t('msgCamError'), 'error');
+            }
+        }
+
+        async function switchCamera() {
+            if(!recordingStream || activeMediaType === 'audio' || isSwitchingCamera) return;
+            isSwitchingCamera = true;
+            currentFacingMode = currentFacingMode === 'environment' ? 'user' : 'environment';
+            
+            try {
+                const newConstraints = { video: { facingMode: currentFacingMode }, audio: activeMediaType === 'video' };
+                const newStream = await navigator.mediaDevices.getUserMedia(newConstraints);
+                
+                if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+                recordingStream.getTracks().forEach(track => track.stop());
+                
+                recordingStream = newStream;
+                const preview = document.getElementById('live-preview');
+                preview.srcObject = recordingStream;
+                preview.play();
+
+                if (activeMediaType === 'video') {
+                    recordedChunks = [];
+                    mediaRecorder = new MediaRecorder(recordingStream);
+                    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+                    mediaRecorder.onstop = processRecording;
+                    mediaRecorder.start(1000);
+                }
+            } catch (err) {
+                currentFacingMode = currentFacingMode === 'environment' ? 'user' : 'environment';
+            } finally {
+                setTimeout(() => { isSwitchingCamera = false; }, 500);
+            }
+        }
+
+        function capturePhoto() {
+            const preview = document.getElementById('live-preview');
+            const canvas = document.createElement('canvas');
+            canvas.width = preview.videoWidth || 640;
+            canvas.height = preview.videoHeight || 480;
+            canvas.getContext('2d').drawImage(preview, 0, 0, canvas.width, canvas.height);
+            
+            canvas.toBlob(blob => {
+                if(blob) {
+                    currentFiles.push({ name: `Live_Photo_${new Date().getTime()}.png`, type: 'image/png', blob: blob, size: blob.size });
+                    renderFilePreviews();
+                }
+                cleanupRecordingUI();
+            }, 'image/png');
+        }
+
+        function startTimer() {
+            recordingTimeLeft = 60;
+            const timerEl = document.getElementById('rec-timer');
+            timerEl.innerText = `01:00`;
+            recordingInterval = setInterval(() => {
+                recordingTimeLeft--;
+                timerEl.innerText = `00:${recordingTimeLeft.toString().padStart(2, '0')}`;
+                if(recordingTimeLeft <= 0) stopRecording();
+            }, 1000);
+        }
+
+        function stopRecording() {
+            if(mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop(); 
+            else cleanupRecordingUI();
+        }
+        
+        function cleanupRecordingUI() {
+            stopMediaTracks();
+            clearInterval(recordingInterval); recordingInterval = null;
+            document.getElementById('recording-ui').classList.add('hidden');
+            document.getElementById('media-options').classList.remove('hidden');
+            document.getElementById('live-preview').classList.add('hidden');
+            document.getElementById('submit-btn').disabled = false;
+        }
+
+        function stopMediaTracks() {
+            if(recordingStream) { recordingStream.getTracks().forEach(track => track.stop()); recordingStream = null; }
+        }
+
+        async function processRecording() {
+            if(!recordingStream && !isSwitchingCamera) return;
+            const isVideo = activeMediaType === 'video';
+            if (recordedChunks.length > 0) {
+                const blob = new Blob(recordedChunks, { type: isVideo ? 'video/webm' : 'audio/webm' });
+                currentFiles.push({ name: `Live_${isVideo?'Video':'Audio'}_${new Date().getTime()}.${isVideo?'webm':'webm'}`, type: blob.type, blob: blob, size: blob.size });
+                renderFilePreviews();
+            }
+            if (!isSwitchingCamera) cleanupRecordingUI();
+        }
+
+        function renderFilePreviews() {
+            const container = document.getElementById('file-preview-container');
+            if(!container) return;
+            container.innerHTML = '';
+            
+            if(currentFiles.length === 0) {
+                container.classList.add('hidden');
+                return;
+            }
+            container.classList.remove('hidden');
+            
+            currentFiles.forEach((file, index) => {
+                const icon = file.type.startsWith('video') ? 'fa-video text-purple-500' : (file.type.startsWith('audio') ? 'fa-microphone text-yellow-500' : 'fa-image text-blue-500');
+                
+                container.innerHTML += `
+                    <div class="flex items-center justify-between bg-white border border-gray-200 p-3 rounded-lg shadow-sm">
+                        <div class="flex items-center gap-3">
+                            <i class="fa-solid ${icon} text-xl w-6"></i>
+                            <div>
+                                <p class="text-sm font-semibold truncate w-40">${file.name}</p>
+                                <p class="text-xs text-gray-500">${(file.size/1024/1024).toFixed(2)} MB</p>
+                            </div>
+                        </div>
+                        <button type="button" class="text-red-500 p-2" onclick="currentFiles.splice(${index}, 1); renderFilePreviews();">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+                `;
+            });
+        }
+
+        function renderView() {
+            const main = document.getElementById('main-content');
+            switch(state.view) {
+                case 'landing': main.innerHTML = getLandingHTML(); break;
+                case 'home': main.innerHTML = getHomeHTML(); break;
+                case 'about': main.innerHTML = getAboutHTML(); break;
+                case 'submit': main.innerHTML = getSubmitHTML(); break;
+                case 'publicIssues': main.innerHTML = getPublicIssuesHTML(); break;
+                case 'statusCheck': main.innerHTML = getStatusCheckHTML(); break;
+                case 'adminLogin': main.innerHTML = getAdminLoginHTML(); break;
+                case 'adminDashboard': main.innerHTML = state.isAdminAuth ? getAdminDashboardHTML() : getAdminLoginHTML(); break;
+            }
+            updateStaticText();
+        }
+
+        function getAboutHTML() {
+            return `<div class="max-w-3xl mx-auto mt-10 fade-in text-center"><div class="w-24 h-24 bg-brand-100 text-brand-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner"><i class="fa-solid fa-circle-info text-5xl"></i></div><h2 class="text-3xl font-bold text-gray-900 mb-6">${t('aboutTitle')}</h2><div class="bg-white p-8 rounded-2xl shadow-lg border border-gray-100 text-left space-y-4"><p class="text-lg text-gray-700 leading-relaxed">${t('aboutDesc1')}</p><p class="text-lg text-gray-700 leading-relaxed">${t('aboutDesc2')}</p><div class="mt-8 pt-6 border-t border-gray-200 flex justify-center gap-4"><button onclick="navigate('home')" class="bg-brand-600 hover:bg-brand-700 text-white font-bold py-3 px-8 rounded-xl shadow transition">${t('portalUser')}</button></div></div></div>`;
+        }
+
+        function getLandingHTML() {
+            return `<div class="flex flex-col items-center justify-center text-center mt-12 fade-in min-h-[60vh]"><div class="w-28 h-28 bg-brand-600 text-white rounded-full flex items-center justify-center mb-8 shadow-2xl transform transition hover:scale-105"><i class="fa-solid fa-hands-holding-circle text-5xl"></i></div><h2 class="text-4xl md:text-5xl font-extrabold text-gray-900 mb-4 tracking-tight">${t('landingTitle')}</h2><p class="text-xl text-gray-600 max-w-2xl mb-12 leading-relaxed">${t('landingDesc')}</p><div class="flex flex-col sm:flex-row gap-6 w-full justify-center max-w-3xl"><button onclick="navigate('home')" class="flex-1 bg-white border-2 border-brand-600 hover:bg-brand-50 text-brand-700 font-bold py-6 px-8 rounded-2xl shadow-xl transition transform hover:-translate-y-2 flex flex-col items-center justify-center gap-4 group"><div class="bg-brand-100 text-brand-600 w-16 h-16 rounded-full flex items-center justify-center group-hover:scale-110 transition"><i class="fa-solid fa-users text-3xl"></i></div><span class="text-2xl">${t('portalUser')}</span></button><button onclick="navigate('adminLogin')" class="flex-1 bg-gray-900 hover:bg-black text-white font-bold py-6 px-8 rounded-2xl shadow-xl transition transform hover:-translate-y-2 flex flex-col items-center justify-center gap-4 group"><div class="bg-gray-800 text-gray-200 w-16 h-16 rounded-full flex items-center justify-center group-hover:scale-110 transition"><i class="fa-solid fa-shield-halved text-3xl"></i></div><span class="text-2xl">${t('portalAdmin')}</span></button></div></div>`;
+        }
+
+        function getHomeHTML() {
+            return `<div class="flex flex-col items-center justify-center text-center mt-10 fade-in"><div class="w-24 h-24 bg-brand-100 text-brand-600 rounded-full flex items-center justify-center mb-6 shadow-inner"><i class="fa-solid fa-bullhorn text-4xl"></i></div><h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4">${t('welcome')}</h2><p class="text-lg text-gray-600 max-w-2xl mb-10 leading-relaxed">${t('welcomeDesc')}</p><div class="flex flex-col sm:flex-row gap-4 w-full justify-center max-w-2xl"><button onclick="navigate('submit')" class="flex-1 bg-brand-600 hover:bg-brand-700 text-white font-bold py-4 px-6 rounded-xl shadow-lg transition transform hover:-translate-y-1 flex items-center justify-center gap-3"><i class="fa-solid fa-plus text-xl"></i> ${t('btnReport')}</button><button onclick="navigate('statusCheck')" class="flex-1 bg-white border-2 border-brand-600 text-brand-600 hover:bg-brand-50 font-bold py-4 px-6 rounded-xl shadow transition transform hover:-translate-y-1 flex items-center justify-center gap-3"><i class="fa-solid fa-magnifying-glass text-xl"></i> ${t('btnStatus')}</button><button onclick="navigate('publicIssues')" class="flex-1 bg-gray-800 hover:bg-gray-900 text-white font-bold py-4 px-6 rounded-xl shadow transition transform hover:-translate-y-1 flex items-center justify-center gap-3"><i class="fa-solid fa-list-ul text-xl"></i> ${t('btnPublicIssues')}</button></div></div>`;
+        }
+
+        function getSubmitHTML() {
+            return `
+                <div class="max-w-2xl mx-auto bg-white rounded-2xl shadow-lg border border-gray-100 p-6 md:p-8 fade-in">
+                    <div class="flex items-center gap-4 mb-6">
+                        <button onclick="navigate('home')" class="text-gray-400 hover:text-brand-600 transition"><i class="fa-solid fa-arrow-left text-xl"></i></button>
+                        <h2 class="text-2xl font-bold text-gray-900">${t('formTitle')}</h2>
+                    </div>
+
+                    <form onsubmit="handleSubmission(event)" class="space-y-5">
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1">${t('lblCategory')}</label>
+                            <select id="category" class="w-full bg-gray-50 border border-gray-300 rounded-xl p-3 focus:ring-brand-500" required>
+                                <option value="">${t('catSelect')}</option><option value="Electricity">${t('catElectricity')}</option><option value="Water">${t('catWater')}</option><option value="Drainage">${t('catDrainage')}</option><option value="Roads">${t('catRoads')}</option><option value="Other">${t('catOther')}</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-1">${t('lblDesc')}</label>
+                            <textarea id="description" rows="4" class="w-full bg-gray-50 border border-gray-300 rounded-xl p-3 focus:ring-brand-500" placeholder="${t('descPlaceholder')}" required></textarea>
+                        </div>
+
+                        <div class="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                            <label class="block text-sm font-bold text-gray-800 mb-3">${t('lblMedia')}</label>
+                            <div id="media-options" class="flex flex-wrap gap-3">
+                                <button type="button" onclick="startLiveMedia('video')" class="bg-red-50 border border-red-200 hover:bg-red-100 text-red-600 font-semibold py-2 px-4 rounded-lg flex items-center gap-2 transition"><i class="fa-solid fa-video"></i> ${t('btnRecVideo')}</button>
+                                <button type="button" onclick="startLiveMedia('audio')" class="bg-purple-50 border border-purple-200 hover:bg-purple-100 text-purple-600 font-semibold py-2 px-4 rounded-lg flex items-center gap-2 transition"><i class="fa-solid fa-microphone"></i> ${t('btnRecAudio')}</button>
+                                <button type="button" onclick="startLiveMedia('photo')" class="bg-blue-50 border border-blue-200 hover:bg-blue-100 text-blue-600 font-semibold py-2 px-4 rounded-lg flex items-center gap-2 transition"><i class="fa-solid fa-camera"></i> ${t('btnRecPhoto')}</button>
+                            </div>
+
+                            <div id="recording-ui" class="hidden mt-4 flex flex-col items-center bg-gray-900 p-4 rounded-xl relative">
+                                <button type="button" id="switch-cam-btn" onclick="switchCamera()" class="absolute top-2 left-2 flex items-center justify-center w-8 h-8 text-white bg-gray-700/80 hover:bg-gray-600 rounded-full z-10 transition shadow-lg hidden" title="Switch Camera"><i class="fa-solid fa-camera-rotate"></i></button>
+                                <div class="absolute top-2 right-2 flex items-center gap-2 text-white bg-red-600 px-3 py-1 rounded-full text-xs font-bold pulse-recording z-10" id="rec-timer-container"><div class="w-2 h-2 bg-white rounded-full"></div> <span id="rec-timer">01:00</span></div>
+                                <video id="live-preview" class="w-full h-48 bg-black rounded-lg hidden media-preview" muted></video>
+                                <div class="mt-4 w-full flex justify-center"><button type="button" id="rec-action-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-full flex items-center gap-2 transition pulse-recording"><i class="fa-solid fa-stop"></i> ${t('btnStopRec')}</button></div>
+                            </div>
+                            <div id="file-preview-container" class="mt-4 space-y-2 hidden max-h-48 overflow-y-auto"></div>
+                        </div>
+
+                        <button type="submit" id="submit-btn" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-4 rounded-xl shadow-md transition text-lg mt-4">
+                            ${t('btnSubmit')}
+                        </button>
+                    </form>
+                </div>
+            `;
+        }
+
+        async function handleSubmission(e) {
+            e.preventDefault();
+
+            if (!isCloudConnected) {
+                showModal('custom-modal', t('alertError'), "Error: Firebase Database is not connected for public viewing. Please add config.", 'error');
+                return;
+            }
+
+            const btn = document.getElementById('submit-btn');
+            btn.innerHTML = `<div class="loader mr-2 border-white border-t-brand-600 inline-block align-middle"></div> ${t('msgProcessing')}`;
+            btn.disabled = true;
+
+            const id = generateTrackingId();
+            
+            try {
+                let mediaUrls = [];
+                // 1. Upload media silently to Cloudinary
+                if (currentFiles.length > 0) {
+                    for (let f of currentFiles) {
+                        const uploadedData = await uploadMediaToCloudinary(f);
+                        if (uploadedData) mediaUrls.push(uploadedData);
+                    }
+                }
+
+                const issue = {
+                    id: id,
+                    category: document.getElementById('category').value,
+                    description: document.getElementById('description').value,
+                    status: 'Received',
+                    date: new Date().toISOString(),
+                    hasMedia: mediaUrls.length > 0,
+                    mediaUrls: mediaUrls
+                };
+
+                // 2. Save text and media URLs globally to Firebase Firestore
+                await db.collection('issues').doc(id).set(issue);
+                
+                // Track locally for user status checking
+                state.lastSubmissionId = id;
+                state.lastKnownStatus = 'Received';
+                localStorage.setItem('un_last_id', id);
+                localStorage.setItem('un_last_status', 'Received');
+
+                setTimeout(() => {
+                    showModal('custom-modal', t('alertSuccess'), `${t('msgReportSubmitted')} ${id}`, 'success', 
+                    `<button onclick="navigate('home'); closeModal('custom-modal');" class="bg-brand-600 text-white px-4 py-2 rounded">${t('btnHome')}</button>
+                     <button onclick="navigate('statusCheck'); closeModal('custom-modal');" class="bg-gray-200 text-gray-800 px-4 py-2 rounded ml-2">${t('btnTrackStatus')}</button>`);
+                }, 1000);
+            } catch(error) {
+                console.error("Submission error", error);
+                showModal('custom-modal', t('alertError'), t('msgFailedMedia'), 'error');
+            } finally {
+                btn.innerHTML = t('btnSubmit');
+                btn.disabled = false;
+            }
+        }
+
+        function getPublicIssuesHTML() {
+            let ongoingHtml = '';
+            let completedHtml = '';
+            const sorted = [...state.submissions].sort((a,b) => new Date(b.date) - new Date(a.date));
+            
+            sorted.forEach(s => {
+                const dateObj = new Date(s.date);
+                const dateStr = dateObj.toLocaleDateString(state.lang === 'ta' ? 'ta-IN' : 'en-IN');
+                const timeStr = dateObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                const catStr = t('cat'+s.category) || s.category;
+                const statusStr = t('stat'+s.status) || s.status;
+                const icon = s.status === 'Completed' ? 'fa-circle-check text-green-500' : 'fa-spinner text-blue-500 fa-spin-pulse';
+                
+                const card = `
+                    <div class="bg-white border border-gray-200 p-4 rounded-xl shadow-sm mb-3 flex items-start justify-between flex-wrap gap-2">
+                        <div>
+                            <div class="flex items-center gap-2 mb-1">
+                                <span class="font-bold text-gray-800">${catStr}</span>
+                                ${s.hasMedia ? '<i class="fa-solid fa-paperclip text-gray-400 text-xs"></i>' : ''}
+                            </div>
+                            <div class="text-xs text-gray-500 font-mono">${s.id.replace(/.(?=.{4})/g, '*')}</div>
+                            <div class="text-xs text-gray-500 mt-2"><i class="fa-regular fa-clock"></i> ${dateStr} at ${timeStr}</div>
+                        </div>
+                        <div class="flex flex-col items-end gap-2">
+                            <span class="text-xs font-bold uppercase flex items-center gap-1"><i class="fa-solid ${icon}"></i> ${statusStr}</span>
+                            <button onclick="viewIssueDetails('${s.id}')" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 py-1 px-3 rounded-lg font-bold border border-gray-300 transition">${t('viewDetails')}</button>
+                        </div>
+                    </div>
+                `;
+                if(s.status === 'Completed') completedHtml += card;
+                else ongoingHtml += card;
+            });
+
+            if(!ongoingHtml) ongoingHtml = `<p class="text-gray-500 text-center py-4">${t('noIssues')}</p>`;
+            if(!completedHtml) completedHtml = `<p class="text-gray-500 text-center py-4">${t('noIssues')}</p>`;
+
+            return `
+                <div class="max-w-4xl mx-auto fade-in">
+                    <div class="flex items-center gap-4 mb-8">
+                        <button onclick="navigate('home')" class="text-gray-400 hover:text-brand-600"><i class="fa-solid fa-arrow-left text-xl"></i></button>
+                        <h2 class="text-2xl font-bold">${t('publicTitle')}</h2>
+                    </div>
+                    <div class="grid md:grid-cols-2 gap-6">
+                        <div class="bg-blue-50/50 p-4 rounded-2xl border border-blue-100">
+                            <h3 class="text-lg font-bold text-blue-900 mb-4 flex items-center gap-2"><i class="fa-solid fa-person-digging"></i> ${t('tabOngoing')}</h3>
+                            <div class="max-h-[60vh] overflow-y-auto pr-2">${ongoingHtml}</div>
+                        </div>
+                        <div class="bg-green-50/50 p-4 rounded-2xl border border-green-100">
+                            <h3 class="text-lg font-bold text-green-900 mb-4 flex items-center gap-2"><i class="fa-solid fa-check-double"></i> ${t('tabCompleted')}</h3>
+                            <div class="max-h-[60vh] overflow-y-auto pr-2">${completedHtml}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function getStatusCheckHTML() {
+            const defaultId = state.lastSubmissionId || '';
+            return `
+                <div class="max-w-lg mx-auto fade-in mt-6">
+                    <div class="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 md:p-8">
+                        <div class="flex items-center gap-4 mb-6">
+                            <button onclick="navigate('home')" class="text-gray-400 hover:text-brand-600"><i class="fa-solid fa-arrow-left text-xl"></i></button>
+                            <h2 class="text-2xl font-bold">${t('statusTitle')}</h2>
+                        </div>
+                        <div class="flex gap-2 mb-6">
+                            <input type="text" id="status-track-id" value="${defaultId}" class="flex-grow bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 uppercase tracking-widest font-mono font-bold text-gray-900" placeholder="${t('trackIdPlaceholder')}">
+                            <button onclick="handleStatusCheck()" class="bg-brand-600 hover:bg-brand-700 text-white px-6 rounded-xl font-bold transition"><i class="fa-solid fa-magnifying-glass"></i></button>
+                        </div>
+                        <div id="timeline-container" class="hidden mt-8 border-t border-gray-100 pt-6 relative"></div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function handleStatusCheck() {
+            const input = document.getElementById('status-track-id').value.trim().toUpperCase();
+            const issue = state.submissions.find(s => s.id === input);
+            const container = document.getElementById('timeline-container');
+            
+            if(!issue) {
+                container.innerHTML = `<div class="p-4 bg-red-50 text-red-600 rounded-lg text-center font-medium"><i class="fa-solid fa-circle-xmark mr-2"></i>${t('alertNotFound')}</div>`;
+                container.classList.remove('hidden');
+                return;
+            }
+
+            const statuses = ['Received', 'Accepted', 'Working', 'Completed'];
+            const currentIndex = statuses.indexOf(issue.status);
+            
+            let timelineHtml = `<h4 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-6">${t('statusResultTitle')}</h4>`;
+            
+            statuses.forEach((stat, idx) => {
+                const isPast = idx < currentIndex, isCurrent = idx === currentIndex, isFuture = idx > currentIndex;
+                let iconStr = '', colorClass = '', bgClass = '';
+                if(isPast || isCurrent) {
+                    if(stat === 'Received') iconStr = 'fa-inbox';
+                    if(stat === 'Accepted') iconStr = 'fa-thumbs-up';
+                    if(stat === 'Working') iconStr = 'fa-person-digging';
+                    if(stat === 'Completed') iconStr = 'fa-check-double';
+                }
+                if(isPast) { colorClass = 'text-green-600'; bgClass = 'bg-green-100'; }
+                else if(isCurrent) { colorClass = 'text-brand-600'; bgClass = 'bg-brand-100 ring-4 ring-brand-50'; }
+                else { colorClass = 'text-gray-300'; bgClass = 'bg-gray-100'; iconStr = 'fa-circle'; }
+
+                timelineHtml += `
+                    <div class="relative flex items-start gap-4 mb-8 timeline-step">
+                        <div class="timeline-line ${isPast ? 'bg-green-400' : 'bg-gray-200'}"></div>
+                        <div class="w-8 h-8 rounded-full ${bgClass} flex items-center justify-center shrink-0 z-10 shadow-sm"><i class="fa-solid ${iconStr} ${colorClass} text-sm"></i></div>
+                        <div>
+                            <p class="font-bold ${isCurrent ? 'text-gray-900 text-lg' : 'text-gray-600'}">${t('stat'+stat)}</p>
+                            ${isCurrent ? `<p class="text-xs text-gray-500 mt-1">${t('msgStatusUpdated')}</p>` : ''}
+                        </div>
+                    </div>`;
+            });
+
+            container.innerHTML = timelineHtml;
+            container.classList.remove('hidden');
+        }
+
+        function getAdminLoginHTML() {
+            return `
+                <div class="max-w-sm mx-auto bg-white rounded-2xl shadow-xl border border-gray-100 p-8 mt-16 fade-in">
+                    <div class="text-center mb-8"><div class="w-16 h-16 bg-gray-900 text-white rounded-2xl flex items-center justify-center mx-auto mb-4"><i class="fa-solid fa-shield-halved text-2xl"></i></div><h2 class="text-2xl font-bold text-gray-900">${t('adminLoginTitle')}</h2></div>
+                    <form onsubmit="handleAdminLogin(event)" class="space-y-5" id="admin-login-form">
+                        <div><label class="block text-sm font-semibold mb-1">${t('lblUsername')}</label><input type="text" id="a-user" class="w-full bg-gray-50 border rounded-xl p-3 focus:ring-gray-900" value="admin"></div>
+                        <div><label class="block text-sm font-semibold mb-1">${t('lblPassword')}</label><input type="password" id="a-pass" class="w-full bg-gray-50 border rounded-xl p-3 focus:ring-gray-900" value="admin123"></div>
+                        <button type="submit" class="w-full bg-gray-900 hover:bg-black text-white font-bold py-3.5 rounded-xl shadow mt-4">${t('btnLogin')}</button>
+                    </form>
+                    <button onclick="startOTPFlow()" class="w-full mt-6 text-brand-600 hover:underline text-sm font-medium">${t('btnForgot')}</button>
+                    <button onclick="navigate('home')" class="w-full mt-2 text-gray-500 text-sm font-medium">${t('btnBack')}</button>
+                </div>`;
+        }
+
+        function handleAdminLogin(e) {
+            e.preventDefault();
+            const creds = JSON.parse(localStorage.getItem('un_admin_creds'));
+            if(document.getElementById('a-user').value === creds.user && document.getElementById('a-pass').value === creds.pass) {
+                state.isAdminAuth = true; navigate('adminDashboard');
+            } else showModal('custom-modal', t('alertError'), t('alertLoginFailed'), 'error');
+        }
+
+        function startOTPFlow() {
+            showModal('custom-modal', t('otpTitle'), t('otpDesc'), 'info', `<input type="text" id="mock-otp" placeholder="Enter 1234" class="block w-full border p-2 rounded mb-3 text-center tracking-widest font-mono text-xl"><button onclick="verifyOTP()" class="bg-gray-900 text-white px-6 py-2 rounded w-full font-bold">${t('btnVerifyOTP')}</button>`);
+        }
+
+        function verifyOTP() {
+            if(document.getElementById('mock-otp').value === '1234') {
+                showModal('custom-modal', t('newCredsTitle'), '', 'info', `<input type="text" id="new-usr" placeholder="New Username" class="block w-full border p-2 rounded mb-2"><input type="password" id="new-pwd" placeholder="New Password" class="block w-full border p-2 rounded mb-3"><button onclick="saveNewAdminCreds()" class="bg-green-600 text-white px-6 py-2 rounded w-full font-bold">${t('btnSaveCreds')}</button>`);
+            } else { showModal('custom-modal', t('alertError'), t('alertOTPFailed'), 'error'); }
+        }
+
+        function saveNewAdminCreds() {
+            const u = document.getElementById('new-usr').value.trim();
+            const p = document.getElementById('new-pwd').value.trim();
+            if(u && p) {
+                localStorage.setItem('un_admin_creds', JSON.stringify({user: u, pass: p}));
+                showModal('custom-modal', t('alertSuccess'), t('msgCredsUpdated'), 'success');
+            }
+        }
+
+        function getAdminDashboardHTML() {
+            let rows = '';
+            const sorted = [...state.submissions].sort((a,b) => new Date(b.date) - new Date(a.date));
+            const filtered = sorted.filter(s => {
+                if(state.adminTab === 'Received') return s.status === 'Received' || s.status === 'Accepted';
+                if(state.adminTab === 'Working') return s.status === 'Working';
+                if(state.adminTab === 'Completed') return s.status === 'Completed';
+                return true;
+            });
+            
+            filtered.forEach(s => {
+                const dateStr = new Date(s.date).toLocaleString(state.lang === 'ta'?'ta-IN':'en-US', {dateStyle:'short', timeStyle:'short'});
+                const badgeCols = {'Received':'bg-blue-100 text-blue-800','Accepted':'bg-purple-100 text-purple-800','Working':'bg-yellow-100 text-yellow-800','Completed':'bg-green-100 text-green-800'};
+                
+                rows += `
+                    <tr class="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                        <td class="px-4 py-3 font-mono text-sm">${s.id}</td>
+                        <td class="px-4 py-3 text-sm text-gray-500">${dateStr}</td>
+                        <td class="px-4 py-3 text-sm font-semibold">${t('cat'+s.category)||s.category} 
+                            ${s.hasMedia ? '<i class="fa-solid fa-photo-film text-blue-500 ml-1" title="Media Attached"></i>' : ''}</td>
+                        <td class="px-4 py-3">
+                            <select onchange="handleStatusChange(event, '${s.id}', this.value)" class="text-xs font-bold rounded-full px-2 py-1 border-0 focus:ring-0 cursor-pointer ${badgeCols[s.status]}">
+                                <option value="Received" ${s.status==='Received'?'selected':''}>${t('statReceived')}</option>
+                                <option value="Accepted" ${s.status==='Accepted'?'selected':''}>${t('statAccepted')}</option>
+                                <option value="Working" ${s.status==='Working'?'selected':''}>${t('statWorking')}</option>
+                                <option value="Completed" ${s.status==='Completed'?'selected':''}>${t('statCompleted')}</option>
+                            </select>
+                        </td>
+                        <td class="px-4 py-3 text-sm flex gap-2">
+                            <button onclick="viewIssueDetails('${s.id}')" class="text-brand-600 hover:text-brand-800 font-bold bg-brand-50 px-3 py-1 rounded-lg border border-brand-100" title="View Details"><i class="fa-regular fa-eye"></i></button>
+                            <button onclick="triggerDeleteConfirmation('${s.id}', false)" class="text-red-600 hover:text-red-800 font-bold bg-red-50 px-3 py-1 rounded-lg border border-red-100" title="Delete Issue"><i class="fa-solid fa-trash"></i></button>
+                        </td>
+                    </tr>`;
+            });
+
+            const tabBtnCls = "flex-1 py-3 text-center font-bold text-sm border-b-2 transition-all";
+            const actvCls = "text-brand-600 border-brand-600 bg-brand-50/50", inactvCls = "text-gray-500 border-transparent hover:text-gray-700 hover:bg-gray-50";
+
+            return `
+                <div class="fade-in max-w-6xl mx-auto">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold">${t('adminDashTitle')}</h2>
+                        <button onclick="state.isAdminAuth=false; navigate('home');" class="bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 font-bold px-4 py-2 rounded-lg flex items-center gap-2 transition"><i class="fa-solid fa-power-off"></i> ${t('btnLogout')}</button>
+                    </div>
+                    <div class="flex bg-white rounded-t-2xl border-b border-gray-200 mb-4 overflow-hidden shadow-sm">
+                        <button onclick="state.adminTab='Received'; renderView();" class="${tabBtnCls} ${state.adminTab==='Received'?actvCls:inactvCls}"><i class="fa-solid fa-inbox mr-1"></i> ${t('tabReceived')}</button>
+                        <button onclick="state.adminTab='Working'; renderView();" class="${tabBtnCls} ${state.adminTab==='Working'?actvCls:inactvCls}"><i class="fa-solid fa-person-digging mr-1"></i> ${t('tabWorking')}</button>
+                        <button onclick="state.adminTab='Completed'; renderView();" class="${tabBtnCls} ${state.adminTab==='Completed'?actvCls:inactvCls}"><i class="fa-solid fa-check-double mr-1"></i> ${t('tabCompletedAdmin')}</button>
+                    </div>
+                    <div class="bg-white shadow-lg rounded-b-2xl overflow-hidden border border-gray-100 overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>
+                            <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">${t('colId')}</th>
+                            <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">${t('colDate')}</th>
+                            <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">${t('colCat')}</th>
+                            <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">${t('colStatus')}</th>
+                            <th class="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">${t('lblAction')}</th>
+                        </tr></thead><tbody class="divide-y divide-gray-200">${rows||`<tr><td colspan="5" class="text-center py-8 text-gray-500 font-medium">${t('msgNoIssuesDash')}</td></tr>`}</tbody></table>
+                    </div>
+                </div>`;
+        }
+
+        async function updateStatus(id, stat) {
+            if (isCloudConnected) {
+                await db.collection('issues').doc(id).update({ status: stat });
+            }
+        }
+
+        function handleStatusChange(e, id, stat) {
+            if(stat === 'Completed') {
+                const issue = state.submissions.find(s => s.id === id);
+                e.target.value = issue.status; 
+                currentAdminModeIssueId = id;
+                
+                showModal('custom-modal', t('proofTitle'), t('proofDesc'), 'info', `
+                    <div class="mb-4 text-left w-full">
+                        <label class="block text-sm font-bold text-gray-800 mb-2">${t('lblAdminDesc')} <span class="text-red-500">*</span></label>
+                        <textarea id="admin-proof-desc-input" rows="3" class="w-full text-sm border border-gray-300 rounded-lg p-2 bg-gray-50 focus:ring-brand-500 focus:outline-none" placeholder="${t('adminDescPlaceholder')}"></textarea>
+                    </div>
+                    <div class="mb-4 text-left w-full">
+                        <label class="block text-sm font-bold text-gray-800 mb-2">${t('lblAdminProof')} <span class="text-red-500">*</span></label>
+                        <input type="file" id="admin-proof-file-input" multiple accept="image/*,video/*,audio/*" capture="environment" class="w-full text-sm border border-gray-300 rounded-lg p-2 bg-gray-50">
+                    </div>
+                    <div class="flex gap-3 w-full mt-4">
+                        <button onclick="closeModal('custom-modal')" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 py-2.5 rounded-lg font-bold transition">${t('btnCancel')}</button>
+                        <button onclick="submitAdminProof(this)" class="flex-1 bg-green-600 hover:bg-green-700 text-white py-2.5 rounded-lg font-bold transition">${t('btnSubmitProof')}</button>
+                    </div>`);
+            } else { updateStatus(id, stat); }
+        }
+
+        function triggerDeleteConfirmation(id, isUser) {
+            showModal('custom-modal', t('btnDeleteReport'), t('msgConfirmDelete'), 'error', `
+                <div class="flex gap-3 w-full justify-center">
+                    <button onclick="closeModal('custom-modal')" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-6 py-2 rounded-lg font-bold transition">${t('btnCancel')}</button>
+                    <button onclick="executeDelete('${id}', ${isUser})" class="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg font-bold transition">${t('btnDelete')}</button>
+                </div>`);
+        }
+
+        async function executeDelete(id, isUser) {
+            closeModal('custom-modal');
+            if (isCloudConnected) await db.collection('issues').doc(id).delete();
+
+            if(isUser && state.lastSubmissionId === id) {
+                state.lastSubmissionId = null; state.lastKnownStatus = null;
+                localStorage.removeItem('un_last_id'); localStorage.removeItem('un_last_status');
+            }
+            
+            setTimeout(() => { showModal('custom-modal', t('alertSuccess'), t('msgDeleted'), 'success'); }, 300);
+            if (isUser) { const trackIdEl = document.getElementById('status-track-id'); if (trackIdEl) trackIdEl.value = ''; const containerEl = document.getElementById('timeline-container'); if (containerEl) { containerEl.innerHTML = ''; containerEl.classList.add('hidden'); } }
+        }
+
+        async function submitAdminProof(btnElement) {
+            const input = document.getElementById('admin-proof-file-input'), descInput = document.getElementById('admin-proof-desc-input');
+            const files = input.files, descText = descInput.value.trim();
+            
+            let hasError = false;
+            if(!files || files.length === 0) { input.classList.add('border-red-500', 'ring-2', 'ring-red-200'); setTimeout(() => input.classList.remove('border-red-500', 'ring-2', 'ring-red-200'), 2000); hasError = true; }
+            if(descText === '') { descInput.classList.add('border-red-500', 'ring-2', 'ring-red-200'); setTimeout(() => descInput.classList.remove('border-red-500', 'ring-2', 'ring-red-200'), 2000); hasError = true; }
+            if(hasError) return;
+            
+            btnElement.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${t('msgProcessing')}`; btnElement.disabled = true;
+            
+            try {
+                let mediaUrls = [];
+                for(let i=0; i<files.length; i++) {
+                    const fileObj = { name: files[i].name, type: files[i].type, size: files[i].size, blob: files[i] };
+                    const uploadedData = await uploadMediaToCloudinary(fileObj);
+                    if (uploadedData) mediaUrls.push(uploadedData);
+                }
+
+                if (isCloudConnected) {
+                    await db.collection('issues').doc(currentAdminModeIssueId).update({
+                        status: 'Completed', adminDescription: descText, adminMediaUrls: mediaUrls
+                    });
+                }
+                
+                closeModal('custom-modal');
+                setTimeout(() => { showModal('custom-modal', t('alertSuccess'), t('msgAdminCompletedSuccess'), 'success'); }, 300);
+            } catch (error) {
+                console.error("Admin upload failed", error);
+                showModal('custom-modal', t('alertError'), t('msgSaveAdminMediaFailed'), 'error');
+                btnElement.innerHTML = t('btnSubmitProof'); btnElement.disabled = false;
+            }
+        }
+
+        async function viewIssueDetails(id) {
+            const issue = state.submissions.find(s => s.id === id);
+            if(!issue) return;
+            
+            let mediaHtml = `<p class="text-sm text-gray-500 italic">${t('msgNoUserMedia')}</p>`;
+            
+            if(issue.hasMedia && issue.mediaUrls && issue.mediaUrls.length > 0) {
+                mediaHtml = '<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">';
+                issue.mediaUrls.forEach(f => {
+                    if(f.type.startsWith('video/')) mediaHtml += `<video controls src="${f.url}" class="w-full rounded-lg border border-gray-300 bg-black"></video>`;
+                    else if(f.type.startsWith('audio/')) mediaHtml += `<audio controls src="${f.url}" class="w-full mt-2"></audio>`;
+                    else mediaHtml += `<img src="${f.url}" class="w-full rounded-lg border border-gray-300 object-cover h-40">`;
+                });
+                mediaHtml += '</div>';
+            }
+
+            let adminMediaHtml = '';
+            if(issue.status === 'Completed') {
+                adminMediaHtml = '<p class="text-sm font-bold text-gray-800 mt-6 mb-3 border-t border-gray-200 pt-4"><i class="fa-solid fa-shield-halved text-brand-600 mr-2"></i>'+t('adminEvidenceLabel')+'</p>';
+                if(issue.adminDescription) {
+                    adminMediaHtml += `<div class="mb-4 bg-green-50 border border-green-200 p-3 rounded-lg"><p class="text-xs text-green-800 uppercase mb-1 font-bold">${t('lblAdminDesc')}</p><p class="text-sm text-gray-800 whitespace-pre-wrap">${issue.adminDescription}</p></div>`;
+                }
+
+                if(issue.adminMediaUrls && issue.adminMediaUrls.length > 0) {
+                    adminMediaHtml += '<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">';
+                    issue.adminMediaUrls.forEach(f => {
+                        if(f.type.startsWith('video/')) adminMediaHtml += `<video controls src="${f.url}" class="w-full rounded-lg border border-green-300 bg-black"></video>`;
+                        else if(f.type.startsWith('audio/')) adminMediaHtml += `<audio controls src="${f.url}" class="w-full mt-2"></audio>`;
+                        else adminMediaHtml += `<img src="${f.url}" class="w-full rounded-lg border border-green-300 object-cover max-h-48">`;
+                    });
+                    adminMediaHtml += '</div>';
+                }
+            }
+
+            const detailsHtml = `
+                <div class="text-left max-h-[65vh] overflow-y-auto pr-2">
+                    <div class="flex justify-between items-start mb-4 border-b pb-2">
+                        <div><p class="text-xs text-gray-500 uppercase">${t('lblTrackId2')}</p><p class="font-mono font-bold text-lg">${issue.id}</p></div>
+                        <div class="text-right"><p class="text-xs text-gray-500 uppercase">${t('lblDate')}</p><p class="font-semibold text-sm">${new Date(issue.date).toLocaleString()}</p></div>
+                    </div>
+                    <div class="mb-4"><p class="text-xs text-gray-500 uppercase mb-1">${t('lblCategory2')}</p><p class="font-bold text-gray-800 bg-gray-100 inline-block px-3 py-1 rounded-lg">${t('cat'+issue.category) || issue.category}</p></div>
+                    <div class="mb-6"><p class="text-xs text-gray-500 uppercase mb-1">${t('lblDesc2')}</p><div class="bg-gray-50 p-3 border border-gray-200 rounded-lg text-sm text-gray-800 whitespace-pre-wrap">${issue.description}</div></div>
+                    <div><p class="text-xs text-gray-500 uppercase mb-3 border-b pb-1 font-bold">${t('lblUserEvidence')}</p>${mediaHtml}</div>
+                    ${adminMediaHtml}
+                </div>
+            `;
+            
+            showModal('custom-modal', t('titleIssueDetails'), '', 'info', `<button onclick="closeModal('custom-modal')" class="bg-gray-900 hover:bg-black text-white w-full py-2.5 rounded-lg font-bold transition">${t('btnCloseDetails')}</button>`);
+            document.getElementById('modal-message').innerHTML = detailsHtml;
+        }
+
+        window.onload = () => {
+            startGlobalSync();
+            updateStaticText();
+            renderView();
+        };
+    </script>
+</body>
+</html>
